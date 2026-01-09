@@ -55,9 +55,98 @@ class PDFBookmarkViewer {
     if (!this._currentPageNumber) {
       return;
     }
+    this._showAddBookmarkDialog();
+  }
 
-    // Default label is "Page X"
-    const label = `Page ${this._currentPageNumber}`;
+  _showAddBookmarkDialog() {
+    const dialog = document.createElement("dialog");
+    dialog.className = "dialog";
+
+    const mainContainer = document.createElement("div");
+    mainContainer.className = "mainContainer";
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "title";
+    const titleSpan = document.createElement("span");
+    titleSpan.textContent = "Add Bookmark";
+    titleDiv.append(titleSpan);
+    mainContainer.append(titleDiv);
+
+    const separator = document.createElement("div");
+    separator.className = "dialogSeparator";
+    mainContainer.append(separator);
+
+    // Form logic
+    const form = document.createElement("form");
+    form.method = "dialog";
+    form.style.marginTop = "10px";
+
+    const inputLabel = document.createElement("label");
+    inputLabel.textContent = "Name: ";
+    inputLabel.style.display = "block";
+    inputLabel.style.marginBottom = "5px";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "addBookmarkTextInput"; // Added ID as requested
+    input.className = "toolbarField";
+    input.required = true;
+    input.placeholder = "Enter bookmark name";
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box"; // Fix padding issue
+    inputLabel.append(input);
+    form.append(inputLabel);
+
+    const buttonsGroup = document.createElement("div");
+    buttonsGroup.className = "dialogButtonsGroup";
+    buttonsGroup.style.display = "flex";
+    buttonsGroup.style.justifyContent = "flex-end"; // Right align buttons
+    buttonsGroup.style.gap = "10px";
+
+    const cancelButton = document.createElement("button");
+    cancelButton.textContent = "Cancel";
+    cancelButton.className = "secondaryButton";
+    cancelButton.type = "button";
+    cancelButton.onclick = () => {
+      dialog.close();
+    };
+
+    const saveButton = document.createElement("button");
+    saveButton.textContent = "Save";
+    saveButton.className = "primaryButton";
+    saveButton.type = "submit";
+
+    buttonsGroup.append(cancelButton);
+    buttonsGroup.append(saveButton);
+    form.append(buttonsGroup);
+
+    mainContainer.append(form);
+    dialog.append(mainContainer);
+    document.body.append(dialog);
+
+    dialog.showModal();
+
+    // Keydown handler to match behaviors
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        // Form submit handled by listener below
+      }
+    });
+
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+    });
+
+    form.addEventListener("submit", e => {
+      const name = input.value;
+      if (name) {
+        this._saveNewBookmark(name);
+      }
+    });
+  }
+
+  _saveNewBookmark(name) {
+    const label = `${name} (pg. ${this._currentPageNumber})`;
     const newBookmark = {
       page: this._currentPageNumber,
       label,
