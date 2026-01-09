@@ -84,6 +84,7 @@ import { PDFFindController } from "./pdf_find_controller.js";
 import { PDFHistory } from "./pdf_history.js";
 import { PDFLayerViewer } from "web-pdf_layer_viewer";
 import { PDFOutlineViewer } from "web-pdf_outline_viewer";
+import { PDFBookmarkViewer } from "./pdf_bookmark_viewer.js";
 import { PDFPresentationMode } from "web-pdf_presentation_mode";
 import { PDFPrintServiceFactory } from "web-print_service";
 import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
@@ -138,6 +139,8 @@ const PDFViewerApplication = {
   viewsManager: null,
   /** @type {PDFOutlineViewer} */
   pdfOutlineViewer: null,
+  /** @type {PDFBookmarkViewer} */
+  pdfBookmarkViewer: null,
   /** @type {PDFAttachmentViewer} */
   pdfAttachmentViewer: null,
   /** @type {PDFLayerViewer} */
@@ -752,6 +755,15 @@ const PDFViewerApplication = {
       this.pdfLayerViewer = new PDFLayerViewer({
         container: appConfig.viewsManager.layersView,
         eventBus,
+        l10n,
+      });
+    }
+
+    if (appConfig.viewsManager?.bookmarksView) {
+      this.pdfBookmarkViewer = new PDFBookmarkViewer({
+        container: appConfig.viewsManager.bookmarksView,
+        eventBus,
+        linkService,
         l10n,
       });
     }

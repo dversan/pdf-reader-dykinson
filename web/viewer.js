@@ -113,6 +113,7 @@ function getViewerConfiguration() {
       outlineButton: document.getElementById("outlinesViewMenu"),
       attachmentsButton: document.getElementById("attachmentsViewMenu"),
       layersButton: document.getElementById("layersViewMenu"),
+      bookmarksButton: document.getElementById("bookmarksViewMenu"),
       viewsManagerSelectorButton: document.getElementById(
         "viewsManagerSelectorButton"
       ),
@@ -123,6 +124,7 @@ function getViewerConfiguration() {
       outlinesView: document.getElementById("outlinesView"),
       attachmentsView: document.getElementById("attachmentsView"),
       layersView: document.getElementById("layersView"),
+      bookmarksView: document.getElementById("bookmarksView"),
       viewsManagerAddFileButton: document.getElementById(
         "viewsManagerAddFileButton"
       ),

@@ -83,10 +83,12 @@ class ViewsManager extends Sidebar {
       outlineButton,
       attachmentsButton,
       layersButton,
+      bookmarksButton,
       thumbnailsView,
       outlinesView,
       attachmentsView,
       layersView,
+      bookmarksView,
       viewsManagerCurrentOutlineButton,
       viewsManagerSelectorButton,
       viewsManagerSelectorOptions,
@@ -125,11 +127,13 @@ class ViewsManager extends Sidebar {
     this.outlineButton = outlineButton;
     this.attachmentsButton = attachmentsButton;
     this.layersButton = layersButton;
+    this.bookmarksButton = bookmarksButton;
 
     this.thumbnailsView = thumbnailsView;
     this.outlinesView = outlinesView;
     this.attachmentsView = attachmentsView;
     this.layersView = layersView;
+    this.bookmarksView = bookmarksView;
 
     this.viewsManagerCurrentOutlineButton = viewsManagerCurrentOutlineButton;
     this.viewsManagerHeaderLabel = viewsManagerHeaderLabel;
@@ -139,7 +143,13 @@ class ViewsManager extends Sidebar {
     this.menu = new Menu(
       viewsManagerSelectorOptions,
       viewsManagerSelectorButton,
-      [thumbnailButton, outlineButton, attachmentsButton, layersButton]
+      [
+        thumbnailButton,
+        outlineButton,
+        attachmentsButton,
+        layersButton,
+        bookmarksButton,
+      ]
     );
 
     ViewsManager.#l10nDescription ||= Object.freeze({
@@ -147,6 +157,7 @@ class ViewsManager extends Sidebar {
       outlinesTitle: "pdfjs-views-manager-outlines-title",
       attachmentsTitle: "pdfjs-views-manager-attachments-title",
       layersTitle: "pdfjs-views-manager-layers-title",
+      bookmarksTitle: "Bookmarks",
       notificationButton: "pdfjs-toggle-views-manager-notification-button",
       toggleButton: "pdfjs-toggle-views-manager-button",
     });
@@ -164,6 +175,7 @@ class ViewsManager extends Sidebar {
     this.outlineButton.disabled =
       this.attachmentsButton.disabled =
       this.layersButton.disabled =
+      this.bookmarksButton.disabled =
         false;
     this.viewsManagerCurrentOutlineButton.disabled = true;
   }
@@ -241,16 +253,27 @@ class ViewsManager extends Sidebar {
           return;
         }
         break;
+      case SidebarView.BOOKMARKS:
+        titleL10nId = "bookmarksTitle";
+        if (this.bookmarksButton.disabled) {
+          return;
+        }
+        break;
       default:
         console.error(`PDFSidebar.switchView: "${view}" is not a valid view.`);
         return;
     }
 
     this.viewsManagerCurrentOutlineButton.hidden = view !== SidebarView.OUTLINE;
-    this.viewsManagerHeaderLabel.setAttribute(
-      "data-l10n-id",
-      ViewsManager.#l10nDescription[titleL10nId] || ""
-    );
+    if (titleL10nId === "bookmarksTitle") {
+      this.viewsManagerHeaderLabel.removeAttribute("data-l10n-id");
+      this.viewsManagerHeaderLabel.textContent = "Bookmarks";
+    } else {
+      this.viewsManagerHeaderLabel.setAttribute(
+        "data-l10n-id",
+        ViewsManager.#l10nDescription[titleL10nId] || ""
+      );
+    }
 
     // Update the active view *after* it has been validated above,
     // in order to prevent setting it to an invalid state.
@@ -276,6 +299,11 @@ class ViewsManager extends Sidebar {
       this.layersButton,
       view === SidebarView.LAYERS,
       this.layersView
+    );
+    toggleSelectedBtn(
+      this.bookmarksButton,
+      view === SidebarView.BOOKMARKS,
+      this.bookmarksView
     );
 
     if (forceOpen && !this.isOpen) {
@@ -419,6 +447,10 @@ class ViewsManager extends Sidebar {
     });
     this.layersButton.addEventListener("dblclick", () => {
       eventBus.dispatch("resetlayers", { source: this });
+    });
+
+    this.bookmarksButton.addEventListener("click", () => {
+      this.switchView(SidebarView.BOOKMARKS);
     });
 
     // Buttons for view-specific options.
