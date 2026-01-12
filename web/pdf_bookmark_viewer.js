@@ -375,22 +375,44 @@ class PDFBookmarkViewer {
           (a, b) => a.transform[4] - b.transform[4]
         );
 
+        const firstItem = lineItems[0];
+        let height = Math.abs(firstItem.transform[3]);
+
+        // Detect Drop Cap: If first char is significantly larger than body,
+        // but subsequent text is body-sized, treat the whole line as body size.
+        if (lineItems.length > 1) {
+          const secondItem = lineItems[1];
+          const secondHeight = Math.abs(secondItem.transform[3]);
+          const firstRounded = Math.round(height * 2) / 2;
+          const secondRounded = Math.round(secondHeight * 2) / 2;
+
+          if (
+            firstRounded > bodyHeight * 1.2 &&
+            secondRounded <= bodyHeight * 1.1
+          ) {
+            height = secondHeight;
+          }
+        }
+
+        const roundedHeight = Math.round(height * 2) / 2;
+        const fontObj = styles[firstItem.fontName] || {};
+
         // Extract text with smart spacing and accent fixing
         const text = this._extractLineText(lineItems);
 
         // Skip empty, short noise, or purely numeric page numbers (unless it looks like "1." header)
+        // REFINED: Only discard short text if it looks like body text (same height).
+        // This preserves short headers like "I", "IV", "1.", etc.
+        const isBodySize = roundedHeight === bodyHeight;
+
         if (
           !text ||
-          text.length < 3 ||
+          (text.length < 3 && isBodySize) ||
           (/^\d+$/.test(text) && !text.endsWith("."))
         ) {
           return;
         }
 
-        const firstItem = lineItems[0];
-        const height = Math.abs(firstItem.transform[3]);
-        const roundedHeight = Math.round(height * 2) / 2;
-        const fontObj = styles[firstItem.fontName] || {};
         const isBold = fontObj.fontFamily
           ? fontObj.fontFamily.toLowerCase().includes("bold") ||
             fontObj.fontWeight >= 700
@@ -505,7 +527,9 @@ class PDFBookmarkViewer {
   }
 
   _mergeCandidates(candidates) {
-    if (candidates.length === 0) return [];
+    if (candidates.length === 0) {
+      return [];
+    }
 
     const merged = [candidates[0]];
     for (let i = 1; i < candidates.length; i++) {
