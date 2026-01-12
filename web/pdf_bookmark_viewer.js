@@ -457,7 +457,11 @@ class PDFBookmarkViewer {
 
   _calculateBodyHeight(pagesText) {
     const fontStats = {};
-    pagesText.forEach(page => {
+    // Optimization: Use first 100 pages as sample.
+    // Sufficient for statistical mode and saves iteration on large docs.
+    const sample = pagesText.slice(0, 100);
+
+    sample.forEach(page => {
       page.content.items.forEach(item => {
         const height = Math.abs(item.transform[3]);
         const roundedHeight = Math.round(height * 2) / 2;
