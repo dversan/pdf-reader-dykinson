@@ -260,7 +260,8 @@ class PDFBookmarkViewer {
 
       // 1. Title Label
       const titleSpan = document.createElement("span");
-      titleSpan.textContent = `${numbering} ${bm.label}`;
+      titleSpan.textContent =
+        bm.source === "toc" ? bm.label : `${numbering} ${bm.label}`;
       titleSpan.style.marginRight = "4px";
       // Allow wrapping if needed, but flex handling usually does this
 
@@ -304,14 +305,11 @@ class PDFBookmarkViewer {
   }
 
   async autoGenerateBookmarks() {
-    // eslint-disable-next-line no-alert
-    if (!window.confirm("This will replace existing bookmarks. Continue?")) {
-      return;
-    }
+    // Confirmation dialog removed as per user request
 
     try {
       const loadingDiv = document.createElement("div");
-      loadingDiv.textContent = "Analyzing document... This may take a moment.";
+      loadingDiv.textContent = "Checking for existing index...";
       loadingDiv.style.padding = "10px";
       loadingDiv.style.fontStyle = "italic";
       loadingDiv.style.color = "var(--text-color)";
@@ -326,8 +324,43 @@ class PDFBookmarkViewer {
       const numPages = pdfDocument.numPages;
       const pagesText = [];
 
-      // 1. Extract all text and styles.
-      for (let i = 1; i <= numPages; i++) {
+      // 1. Initial Scan: First 20 pages for TOC
+      const checkLimit = Math.min(numPages, 20);
+      for (let i = 1; i <= checkLimit; i++) {
+        const page = await pdfDocument.getPage(i);
+        const content = await page.getTextContent();
+        pagesText.push({ pageNumber: i, content });
+      }
+
+      // 2. Try to detect and parse existing TOC
+      // Note: _detectTOC is now async and handles fetching
+      // extra pages if needed
+      const tocPages = await this._detectTOC(pagesText, pdfDocument);
+
+      if (tocPages && tocPages.length > 0) {
+        loadingDiv.textContent = `Found index (${tocPages.length} pages)! Extracting...`;
+        await new Promise(resolve => {
+          setTimeout(resolve, 0);
+        });
+
+        const bookmarks = this._parseTOC(tocPages);
+        if (bookmarks.length > 0) {
+          this._bookmarks = bookmarks;
+          this.saveBookmarks();
+          loadingDiv.remove();
+          return; // Success, skip full heuristic scan
+        }
+      }
+
+      // 3. Fallback: Full Heuristic Analyis
+      loadingDiv.textContent =
+        "No index found. Analyzing full document... This may take a moment.";
+      await new Promise(resolve => {
+        setTimeout(resolve, 0);
+      });
+
+      // Extract remaining pages
+      for (let i = checkLimit + 1; i <= numPages; i++) {
         const page = await pdfDocument.getPage(i);
         const content = await page.getTextContent();
         pagesText.push({ pageNumber: i, content });
@@ -344,6 +377,351 @@ class PDFBookmarkViewer {
       // eslint-disable-next-line no-alert
       window.alert("Failed to generate bookmarks.");
     }
+  }
+
+  async _detectTOC(initialPages, pdfDocument) {
+    // Returns { pages: [pageContent, ...], startPageNum: number }
+
+    const titleRegex = /^(Índice|Index|Tabla de contenidos|Sumario|Contenido)/i;
+    const structureKeywordRegex = /(CAP[ÍI]TULO|SECCI[ÓO]N|PARTE)/i;
+
+    let startPageIdx = -1;
+
+    // 1. Find the Start Page
+    for (let i = 0; i < initialPages.length; i++) {
+      const page = initialPages[i];
+      const isStart = this._isTOCStartPage(
+        page,
+        titleRegex,
+        structureKeywordRegex
+      );
+      if (isStart) {
+        startPageIdx = i;
+        break;
+      }
+    }
+
+    if (startPageIdx === -1) {
+      return null;
+    }
+
+    // 2. Collect TOC Pages (Start Page + Continuation)
+    const tocPages = [];
+    // Add the start page
+    tocPages.push(initialPages[startPageIdx]);
+
+    // Check subsequent pages
+    // We need to look at pages AFTER the start page.
+    // Some might be in 'initialPages', some might need fetching.
+    let currentIdx = startPageIdx + 1;
+    let keepScanning = true;
+
+    while (keepScanning) {
+      let nextPage;
+
+      // Check if we already have it in initialPages
+      if (currentIdx < initialPages.length) {
+        nextPage = initialPages[currentIdx];
+      } else {
+        // Need to fetch new page if within document bounds
+        const pageNum = initialPages[0].pageNumber + currentIdx;
+        if (pageNum > pdfDocument.numPages) {
+          break;
+        }
+        try {
+          const page = await pdfDocument.getPage(pageNum);
+          const content = await page.getTextContent();
+          nextPage = { pageNumber: pageNum, content };
+        } catch (e) {
+          console.error("Error fetching page for TOC scan", e);
+          break;
+        }
+      }
+
+      if (this._isTOCPage(nextPage)) {
+        tocPages.push(nextPage);
+        currentIdx++;
+        // Safety break to prevent infinite scan of entire doc if heuristics fail
+        if (tocPages.length > 20) {
+          keepScanning = false;
+        }
+      } else {
+        keepScanning = false;
+      }
+    }
+
+    return tocPages;
+  }
+
+  _isTOCStartPage(page, titleRegex, structureKeywordRegex) {
+    const { items } = page.content;
+    if (items.length === 0) {
+      return false;
+    }
+
+    const lines = this._groupItemsByLine(items);
+    const sortedY = Object.keys(lines).sort((a, b) => b - a);
+
+    let hasTitle = false;
+    let hasDotLeaders = false;
+    let linesWithNumbers = 0;
+
+    // Check top 5 lines for Title
+    for (let i = 0; i < Math.min(sortedY.length, 5); i++) {
+      const lineText = this._extractLineText(lines[sortedY[i]]);
+      if (titleRegex.test(lineText)) {
+        hasTitle = true;
+      }
+    }
+
+    // Scan body for signals
+    for (const y of sortedY) {
+      const lineText = this._extractLineText(lines[y]);
+      // Pattern: Text ending with number
+      if (/.+[\s._·]+\d+$/.test(lineText)) {
+        linesWithNumbers++;
+        if (lineText.includes("....") || lineText.includes("····")) {
+          hasDotLeaders = true;
+        }
+      }
+    }
+
+    // Heuristic: Must have Title AND (DotLeaders OR >3 numbered lines)
+    if (hasTitle && (hasDotLeaders || linesWithNumbers > 3)) {
+      return true;
+    }
+    // Fallback: Title AND Structure Keywords AND some numbered lines
+    // (Optimization: Checking structure keywords here only if needed)
+    if (hasTitle && linesWithNumbers > 2) {
+      // Check for keywords
+      let hasStructureKeywords = false;
+      for (const y of sortedY) {
+        const txt = this._extractLineText(lines[y]);
+        if (structureKeywordRegex.test(txt)) {
+          hasStructureKeywords = true;
+          break;
+        }
+      }
+      if (hasStructureKeywords) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  _isTOCPage(page) {
+    // A continuation page might not have a "Index" title.
+    // It relies heavily on the content pattern: lines ending in numbers.
+    const { items } = page.content;
+    if (!items || items.length === 0) {
+      return false;
+    }
+
+    const lines = this._groupItemsByLine(items);
+    const sortedY = Object.keys(lines).sort((a, b) => b - a);
+
+    let linesWithNumbers = 0;
+    const totalLines = sortedY.length;
+
+    if (totalLines < 3) {
+      return false; // Too empty to be a TOC page
+    }
+
+    for (const y of sortedY) {
+      const lineText = this._extractLineText(lines[y]);
+      // Pattern: Text ... number
+      // We accept a wider range of separators for continuation pages
+      if (/.+[\s._·]+\d+$/.test(lineText)) {
+        linesWithNumbers++;
+      }
+    }
+
+    // Criteria: A significant portion of lines look like TOC entries.
+    // e.g., at least 3 valid lines or > 20% of lines if page is dense.
+    return linesWithNumbers >= 3;
+  }
+
+  _groupItemsByLine(items) {
+    const lines = {};
+    items.forEach(item => {
+      const y = Math.round(item.transform[5]);
+      if (!lines[y]) {
+        lines[y] = [];
+      }
+      lines[y].push(item);
+    });
+    return lines;
+  }
+
+  _parseTOC(tocPages) {
+    const candidates = [];
+    const entryRegex = /^(.+?)(?:[\s._·]+)(\d+)$/;
+
+    // 1. Extract all raw candidates with their X indentation
+    let pendingText = "";
+    let pendingX = null;
+
+    tocPages.forEach(page => {
+      const { items } = page.content;
+      if (!items || items.length === 0) {
+        return;
+      }
+
+      const lines = this._groupItemsByLine(items);
+      const sortedY = Object.keys(lines).sort((a, b) => b - a);
+
+      sortedY.forEach(y => {
+        // Sort items by X to get correct indentation and text order
+        const lineItems = lines[y].sort(
+          (a, b) => a.transform[4] - b.transform[4]
+        );
+
+        // Use X of first item as indentation level
+        const currentX = lineItems[0].transform[4];
+        const lineText = this._extractLineText(lineItems);
+
+        // Filter out noise lines: Headers and Page Markers
+        const isHeader =
+          /^[\s]*(?:Índice|Index|Tabla de contenidos|Contenido|Sumario)[\s]*$/i.test(
+            lineText
+          );
+        // Matches "- 11 -", "11", "1", etc.
+        const isPageMarker = /^[\s-—]*\d+[\s-—]*$/.test(lineText);
+
+        if (isHeader || isPageMarker) {
+          return; // Skip this line
+        }
+
+        const match = lineText.match(entryRegex);
+
+        if (match) {
+          // This line ends with a number, implies end of entry
+          let label = match[1].trim();
+          const pageNum = parseInt(match[2], 10);
+
+          // If we had pending text, prepend it
+          if (pendingText) {
+            label = `${pendingText} ${label}`;
+            // Use the X of the start of the entry if available
+            if (pendingX !== null) {
+              // We'll use pendingX, assumed implicitly by flow or future logic
+            }
+          }
+
+          // Cleanup label trailing dots/chars that regex might have missed
+          label = label.replace(/[._·]+$/, "").trim();
+
+          // Reset pending
+          pendingText = "";
+          pendingX = null;
+
+          // Don't bookmark the title itself
+          // (redundant check but keeps logic safe)
+          if (
+            /^(Índice|Index|Contenido|Tabla de contenidos)$/i.test(label) &&
+            Math.abs(pageNum - page.pageNumber) < 2
+          ) {
+            return;
+          }
+
+          if (pageNum > 0 && pageNum <= this.linkService.pdfDocument.numPages) {
+            candidates.push({
+              label,
+              page: pageNum,
+              x: currentX, // Use current line X for dot leaders alignment
+              source: "toc", // MARK AS TOC SOURCE
+              timestamp: Date.now(),
+            });
+          }
+        } else if (pendingText) {
+          pendingText += " " + lineText;
+        } else {
+          pendingText = lineText;
+          pendingX = currentX; // Save X of the start line
+        }
+      });
+    });
+
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    // 2. Determine indentation levels
+    // Cluster X values
+    const xClusters = [];
+    // Increased tolerance to handle loose alignment or "Drop Cap" quirks
+    const TOLERANCE = 10;
+
+    candidates.forEach(c => {
+      let found = false;
+      for (const cluster of xClusters) {
+        if (Math.abs(cluster.avg - c.x) < TOLERANCE) {
+          cluster.count++;
+          // Weighted average might be better but simple avg update is okay
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        xClusters.push({ avg: c.x, count: 1 });
+      }
+    });
+
+    xClusters.sort((a, b) => a.avg - b.avg);
+
+    // 3. Assign levels
+    return candidates.map(c => {
+      let xLevel = 1;
+      let minDiff = Infinity;
+
+      xClusters.forEach((cluster, index) => {
+        const diff = Math.abs(cluster.avg - c.x);
+        if (diff < minDiff) {
+          minDiff = diff;
+          xLevel = index + 1;
+        }
+      });
+
+      // Try to deduce level from numbering in the label
+      const labelLevel = this._getLevelFromLabel(c.label);
+
+      // Priority: Label Numbering > Visual Indentation
+      // If label has numbering (e.g. 1.1), use it.
+      // Otherwise fallback to visual indentation level.
+      const level = labelLevel > 0 ? labelLevel : xLevel;
+
+      return {
+        ...c,
+        level,
+      };
+    });
+  }
+
+  _getLevelFromLabel(label) {
+    // 1. Check for standard decimal numbering: 1., 1.1, 1.1.1
+    // We look for a sequence of numbers separated by dots at the start.
+    const decimalMatch = label.match(/^(\d+(?:\.\d+)*)/);
+    if (decimalMatch) {
+      // Split by dot and filter empty strings (e.g. "1." -> ["1", ""])
+      const parts = decimalMatch[0].split(".").filter(p => p.length > 0);
+      // Only enforce level if we have subsection depth (e.g. 1.1)
+      // For simple "1.", "2." we defer to indentation because it could be a
+      // subsection under a "Chapter 1" that resets count, or a main chapter.
+      return parts.length > 1 ? parts.length : 0;
+    }
+
+    // 2. Check for keywords implying top level
+    if (/^(Capítulo|Chapter|Parte|Part|Sección|Section)\s/i.test(label)) {
+      return 1;
+    }
+
+    // 3. Roman Numerals (I., II., III...) often Level 1
+    if (/^[IVXLCDM]+\.?\s/i.test(label)) {
+      return 1;
+    }
+
+    return 0; // Inconclusive
   }
 
   _analyzeAndGenerate(pagesText) {
@@ -379,7 +757,7 @@ class PDFBookmarkViewer {
         let height = Math.abs(firstItem.transform[3]);
 
         // Detect Drop Cap: If first char is significantly larger than body,
-        // but subsequent text is body-sized, treat the whole line as body size.
+        // but subsequent text is body-sized, treat line as body size.
         if (lineItems.length > 1) {
           const secondItem = lineItems[1];
           const secondHeight = Math.abs(secondItem.transform[3]);
@@ -397,7 +775,8 @@ class PDFBookmarkViewer {
         const roundedHeight = Math.round(height * 2) / 2;
         const fontObj = styles[firstItem.fontName] || {};
 
-        // Extract text with smart spacing and accent fixing
+        // Extract text with smart spacing
+        // and accent fixing
         const text = this._extractLineText(lineItems);
 
         // Skip empty, short noise, or purely numeric page numbers (unless it looks like "1." header)
@@ -498,7 +877,9 @@ class PDFBookmarkViewer {
         const fontSize = Math.abs(item.transform[0] || item.transform[3] || 10);
 
         // Add space relative to font size
-        if (gap > fontSize * 0.2) {
+        // Increased threshold to avoided splitting loose text
+        // (e.g. Small Caps)
+        if (gap > fontSize * 0.4) {
           text += " ";
         }
       }
