@@ -6,8 +6,8 @@
   "devCommand": "npx gulp server",
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/$1"
+      "source": "/",
+      "destination": "/viewer.html"
     }
   ],
   "headers": [
