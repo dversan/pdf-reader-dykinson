@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx gulp generic",
+  "buildCommand": "npx gulp generic && cp -r build/generic/build/* build/generic/web/",
   "outputDirectory": "build/generic/web",
   "framework": null,
   "installCommand": "npm install",
