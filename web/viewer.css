@@ -128,6 +128,8 @@
   --secondaryToolbarButton-documentProperties-icon: url(images/secondaryToolbarButton-documentProperties.svg);
   --editorParams-stampAddImage-icon: url(images/toolbarButton-zoomIn.svg);
   --comment-edit-button-icon: url(images/comment-editButton.svg);
+  --toolbarButton-createIndex-icon: url(images/filter.svg);
+  --toolbarButton-addBookmark-icon: url(images/toolbarButton-zoomIn.svg);
 }
 
 :root:dir(rtl) {
@@ -462,6 +464,14 @@ body {
 
 #zoomInButton::before {
   mask-image: var(--toolbarButton-zoomIn-icon);
+}
+
+#addBookmarkButton::before {
+  mask-image: var(--toolbarButton-addBookmark-icon);
+}
+
+#createIndexButton::before {
+  mask-image: var(--toolbarButton-createIndex-icon);
 }
 
 #editorCommentButton::before {
@@ -872,7 +882,6 @@ dialog :link {
     box-sizing: border-box;
     overflow-y: auto;
   }
-
   .editorParamsToolbar {
     --editor-toolbar-min-width: 220px;
 
@@ -1463,3 +1472,50 @@ dialog :link {
     display: none;
   }
 }
+
+.bookmarksTabBar {
+  display: flex;
+  background-color: var(--sidebar-toolbar-bg-color);
+  border-bottom: 1px solid var(--sidebar-item-bg-color);
+  padding: 0 4px;
+}
+
+.bookmarkTab {
+  flex: 1;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  font: message-box;
+  font-size: 13px;
+  color: var(--text-color);
+  cursor: pointer;
+  text-align: center;
+  opacity: 0.8;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.bookmarkTab:hover {
+  background-color: var(--sidebar-item-hover-bg-color);
+  opacity: 1;
+}
+
+.bookmarkTab.active {
+  opacity: 1;
+  border-bottom-color: var(--toggled-btn-color);
+  color: var(--toggled-btn-color);
+  font-weight: 600;
+}
+
+#createIndexButton,
+#addBookmarkButton {
+  font-size: 12px;
+}
+
+#createIndexButton::before,
+#addBookmarkButton::before {
+  width: 12px;
+  height: 12px;
+}
+

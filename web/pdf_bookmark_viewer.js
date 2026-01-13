@@ -20,7 +20,11 @@ class PDFBookmarkViewer {
     this.linkService = options.linkService;
     this.l10n = options.l10n;
 
-    this._bookmarks = [];
+    this._customBookmarks = [];
+    this._indexBookmarks = [];
+    // 'custom' or 'index'
+    this._activeTab = "custom";
+
     this._currentPageNumber = 1;
     this.loadBookmarks();
 
@@ -29,19 +33,41 @@ class PDFBookmarkViewer {
   }
 
   loadBookmarks() {
-    const stored = localStorage.getItem("pdfjs_bookmarks");
-    if (stored) {
+    const storedCustom = localStorage.getItem("pdfjs_custom_bookmarks");
+    if (storedCustom) {
       try {
-        this._bookmarks = JSON.parse(stored);
+        this._customBookmarks = JSON.parse(storedCustom);
       } catch (e) {
-        console.error("Failed to parse bookmarks", e);
-        this._bookmarks = [];
+        console.error("Failed to parse custom bookmarks", e);
+        this._customBookmarks = [];
       }
+    } else {
+      this._customBookmarks = [];
+    }
+
+    const storedIndex = localStorage.getItem("pdfjs_index_bookmarks");
+    if (storedIndex) {
+      try {
+        this._indexBookmarks = JSON.parse(storedIndex);
+      } catch (e) {
+        console.error("Failed to parse index bookmarks", e);
+        this._indexBookmarks = [];
+      }
+    } else {
+      this._indexBookmarks = [];
     }
   }
 
   saveBookmarks() {
-    localStorage.setItem("pdfjs_bookmarks", JSON.stringify(this._bookmarks));
+    // Save both just to be safe, or we could split this method
+    localStorage.setItem(
+      "pdfjs_custom_bookmarks",
+      JSON.stringify(this._customBookmarks)
+    );
+    localStorage.setItem(
+      "pdfjs_index_bookmarks",
+      JSON.stringify(this._indexBookmarks)
+    );
     this.render();
   }
 
@@ -153,17 +179,22 @@ class PDFBookmarkViewer {
       timestamp: Date.now(),
     };
 
-    this._bookmarks.push(newBookmark);
+    this._customBookmarks.push(newBookmark);
     this.saveBookmarks();
   }
 
   removeBookmark(index) {
-    this._bookmarks.splice(index, 1);
+    if (this._activeTab === "custom") {
+      this._customBookmarks.splice(index, 1);
+    } else {
+      this._indexBookmarks.splice(index, 1);
+    }
     this.saveBookmarks();
   }
 
   reset() {
-    this._bookmarks = [];
+    this._customBookmarks = [];
+    this._indexBookmarks = [];
     this.loadBookmarks();
     this.render();
   }
@@ -171,40 +202,68 @@ class PDFBookmarkViewer {
   render() {
     this.container.textContent = "";
 
-    // Add "Add Bookmark" button
-    const addButtonDiv = document.createElement("div");
-    addButtonDiv.className = "row";
-    addButtonDiv.style.padding = "10px";
-    addButtonDiv.style.borderBottom = "1px solid var(--sidebar-item-bg-color)";
-    addButtonDiv.style.display = "flex";
-    addButtonDiv.style.gap = "10px";
+    // 1. Render Tab Bar
+    const tabBar = document.createElement("div");
+    tabBar.className = "bookmarksTabBar";
 
-    const addButton = document.createElement("button");
-    addButton.id = "addBookmarkButton";
-    addButton.textContent = "Add";
-    addButton.className = "toolbarButton labeled";
-    addButton.style.flex = "1";
-    addButton.style.cursor = "pointer";
-    addButton.onclick = () => this.addBookmark();
+    const customTab = document.createElement("button");
+    customTab.textContent = "Custom Bookmarks";
+    customTab.className =
+      "bookmarkTab" + (this._activeTab === "custom" ? " active" : "");
+    customTab.onclick = () => {
+      this._activeTab = "custom";
+      this.render();
+    };
 
-    const autoGenButton = document.createElement("button");
-    autoGenButton.id = "autoGenButton";
-    autoGenButton.textContent = "Auto-Gen";
-    autoGenButton.className = "toolbarButton labeled";
-    autoGenButton.style.flex = "1";
-    autoGenButton.style.cursor = "pointer";
-    autoGenButton.onclick = () => this.autoGenerateBookmarks();
+    const indexTab = document.createElement("button");
+    indexTab.textContent = "Index";
+    indexTab.className =
+      "bookmarkTab" + (this._activeTab === "index" ? " active" : "");
+    indexTab.onclick = () => {
+      this._activeTab = "index";
+      this.render();
+    };
 
-    addButtonDiv.append(addButton);
-    addButtonDiv.append(autoGenButton);
-    this.container.append(addButtonDiv);
+    tabBar.append(customTab);
+    tabBar.append(indexTab);
+    this.container.append(tabBar);
 
-    if (this._bookmarks.length === 0) {
+    // 2. Render Button (Add OR Create Index)
+    const buttonDiv = document.createElement("div");
+    buttonDiv.className = "bookmarkButtonContainer";
+
+    if (this._activeTab === "custom") {
+      const addButton = document.createElement("button");
+      addButton.id = "addBookmarkButton";
+      addButton.textContent = "Add";
+      addButton.onclick = () => this.addBookmark();
+      buttonDiv.append(addButton);
+    } else {
+      const createIndexButton = document.createElement("button");
+      createIndexButton.id = "createIndexButton";
+      createIndexButton.textContent = "Create Index";
+      createIndexButton.onclick = () => this.autoGenerateBookmarks();
+      buttonDiv.append(createIndexButton);
+    }
+
+    this.container.append(buttonDiv);
+
+    // 3. Render List
+    const currentList =
+      this._activeTab === "custom"
+        ? this._customBookmarks
+        : this._indexBookmarks;
+
+    if (currentList.length === 0) {
       const emptyDiv = document.createElement("div");
-      emptyDiv.textContent = "No bookmarks yet.";
+      emptyDiv.textContent =
+        this._activeTab === "custom"
+          ? "No custom bookmarks yet."
+          : "No index generated yet.";
       emptyDiv.style.padding = "10px";
       emptyDiv.style.color = "var(--text-color)";
       emptyDiv.style.opacity = "0.7";
+      emptyDiv.style.fontSize = "12px";
       this.container.append(emptyDiv);
       return;
     }
@@ -215,7 +274,7 @@ class PDFBookmarkViewer {
     const counters = [0];
     let lastLevel = 1;
 
-    this._bookmarks.forEach((bm, index) => {
+    currentList.forEach((bm, index) => {
       // ... rendering logic remains ...
       const itemDiv = document.createElement("div");
       itemDiv.className = "treeItem";
@@ -224,7 +283,8 @@ class PDFBookmarkViewer {
       itemDiv.style.alignItems = "center";
       itemDiv.style.padding = "5px 10px";
 
-      // Calculate hierarchical number
+      // Calculate hierarchical number (Only for Index tabs usually, but
+      // harmless for custom if they lack levels)
       const level = bm.level || 1;
 
       if (level > lastLevel) {
@@ -238,8 +298,6 @@ class PDFBookmarkViewer {
       }
       counters[counters.length - 1]++;
       lastLevel = level;
-
-      const numbering = counters.join(".") + ".";
 
       itemDiv.style.paddingLeft = `${(level - 1) * 15 + 10}px`;
       itemDiv.style.cursor = "pointer";
@@ -260,28 +318,64 @@ class PDFBookmarkViewer {
 
       // 1. Title Label
       const titleSpan = document.createElement("span");
-      titleSpan.textContent =
-        bm.source === "toc" ? bm.label : `${numbering} ${bm.label}`;
+      // Use numbering only for auto-generated index items (source=toc)
+      // Custom bookmarks shouldn't be auto-numbered visually unless requested
+      if (this._activeTab === "index" && bm.source === "toc") {
+        titleSpan.textContent = `${bm.label}`; // User didn't ask for numbering
+        // displayed?
+        // Note: Logic in previous file was: bm.source === "toc" ? bm.label :
+        // `${numbering} ${bm.label}`;
+        // But previously all were mixed.
+        // Let's assume INDEX tab items are TOC, so we use their label directly
+        // (which might have numbering integrated or we add it)
+        // Original logic:
+        // bm.source === "toc" ? bm.label : `${numbering} ${bm.label}`;
+        // If Custom (not toc), it added numbering.
+        // The user request implies Custom are "user created".
+        // Let's stick to:
+        titleSpan.textContent = bm.label;
+      } else {
+        // Custom bookmarks
+        titleSpan.textContent = bm.label;
+      }
+      // Revert to original logic if unsure, or adapt:
+      // The user wants "Custom Bookmarks" (user created) vs "Index" (auto).
+      // Auto-gen logic sets `source: 'toc'` and often strips numbering from label to re-add it?
+      // Actually `_parseTOC` uses `source: 'toc'`.
+      // Let's keep it simple: Show label as is for now, maybe add numbering if its Index tab?
+      // For now, I will just display the label to avoid double numbering issues if the extracted label has it.
+      // Wait, let's look at the original code I'm replacing:
+      // bm.source === "toc" ? bm.label : `${numbering} ${bm.label}`;
+      // This implies: TOC items (Auto) = No added numbering. Manual items = Added numbering.
+      // That seems backwards but let's trust existing logic?
+      // Actually, Manual items usually DON'T need hierarchical numbering 1.1.1 unless they form a structure.
+      // Let's simplify: Show Label.
+
       titleSpan.style.marginRight = "4px";
-      // Allow wrapping if needed, but flex handling usually does this
 
-      // 2. Dots Leader
+      // 2. Dots Leader (Only for Index)
       const dotsSpan = document.createElement("span");
-      dotsSpan.style.flexGrow = "1"; // Take up remaining space
-      dotsSpan.style.borderBottom = "1px dotted currentColor";
-      dotsSpan.style.marginBottom = "5px"; // Visual adjustment for baseline
-      dotsSpan.style.opacity = "0.5";
-      dotsSpan.style.marginRight = "4px";
-      dotsSpan.style.minWidth = "20px"; // Ensure at least some dots visible
+      if (this._activeTab === "index") {
+        dotsSpan.style.flexGrow = "1"; // Take up remaining space
+        dotsSpan.style.borderBottom = "1px dotted currentColor";
+        dotsSpan.style.marginBottom = "5px"; // Visual adjustment for baseline
+        dotsSpan.style.opacity = "0.5";
+        dotsSpan.style.marginRight = "4px";
+        dotsSpan.style.minWidth = "20px"; // Ensure at least some dots visible
+      }
 
-      // 3. Page Number
+      // 3. Page Number (Only for Index)
       const pageSpan = document.createElement("span");
-      pageSpan.textContent = bm.page;
-      pageSpan.style.fontWeight = "normal";
+      if (this._activeTab === "index") {
+        pageSpan.textContent = bm.page;
+        pageSpan.style.fontWeight = "normal";
+      }
 
       link.append(titleSpan);
-      link.append(dotsSpan);
-      link.append(pageSpan);
+      if (this._activeTab === "index") {
+        link.append(dotsSpan);
+        link.append(pageSpan);
+      }
 
       const deleteBtn = document.createElement("button");
       deleteBtn.textContent = "×";
@@ -345,7 +439,7 @@ class PDFBookmarkViewer {
 
         const bookmarks = this._parseTOC(tocPages);
         if (bookmarks.length > 0) {
-          this._bookmarks = bookmarks;
+          this._indexBookmarks = bookmarks;
           this.saveBookmarks();
           loadingDiv.remove();
           return; // Success, skip full heuristic scan
@@ -368,7 +462,7 @@ class PDFBookmarkViewer {
 
       const bookmarks = this._analyzeAndGenerate(pagesText);
 
-      this._bookmarks = bookmarks;
+      this._indexBookmarks = bookmarks;
       this.saveBookmarks();
 
       loadingDiv.remove();
@@ -441,7 +535,8 @@ class PDFBookmarkViewer {
       if (this._isTOCPage(nextPage)) {
         tocPages.push(nextPage);
         currentIdx++;
-        // Safety break to prevent infinite scan of entire doc if heuristics fail
+        // Safety break to prevent infinite scan of entire doc if
+        // heuristics fail
         if (tocPages.length > 20) {
           keepScanning = false;
         }
@@ -779,9 +874,10 @@ class PDFBookmarkViewer {
         // and accent fixing
         const text = this._extractLineText(lineItems);
 
-        // Skip empty, short noise, or purely numeric page numbers (unless it looks like "1." header)
-        // REFINED: Only discard short text if it looks like body text (same height).
-        // This preserves short headers like "I", "IV", "1.", etc.
+        // Skip empty, short noise, or purely numeric page numbers
+        // (unless it looks like "1." header)
+        // REFINED: Only discard short text if it looks like body text (same
+        // height). This preserves short headers like "I", "IV", "1.", etc.
         const isBodySize = roundedHeight === bodyHeight;
 
         if (

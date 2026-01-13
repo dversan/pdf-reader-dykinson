@@ -630,25 +630,53 @@
     #bookmarksView {
       padding: 0;
 
-      #addBookmarkButton {
+      .bookmarkButtonContainer {
+        padding: 10px;
+        border-bottom: 1px solid var(--sidebar-item-bg-color);
+        display: flex;
+        gap: 10px;
+      }
+
+      #addBookmarkButton,
+      #createIndexButton {
         display: flex;
         align-items: center;
-        margin-left: 20px;
-        margin-top: 20px;
-        width: calc(100% - 40px) !important;
+        flex: 1; /* Was inline: flex: 1 */
+        justify-content: center; /* Center content */
+        cursor: pointer; /* Was inline: cursor: pointer */
+        width: 100%; /* Ensure it fills flex item */
         background-color: var(--button-bg);
         border: 1px solid var(--button-border-color);
         color: var(--button-fg);
         border-radius: 4px;
+        padding: 6px; /* Add some padding for better look, replacing height implication */
 
         font-size: 12px;
 
         &::before {
-          mask-image: var(--add-bookmark-icon);
+          content: "";
+          display: inline-block;
           width: 12px;
           height: 12px;
           margin-right: 6px;
+          background-color: var(--button-fg); /* Ensure icon color matches text */
+          mask-repeat: no-repeat;
+          mask-position: center;
         }
+
+        &:hover {
+          background-color: var(--button-hover-bg);
+        }
+      }
+
+      #addBookmarkButton::before {
+        mask-image: var(--add-bookmark-icon);
+      }
+
+      #createIndexButton::before {
+        /* We need a filter icon variable in views_manager or reuse existing */
+         mask-image: url(images/filter.svg); /* Hardcoding for specific requirement or use variable if available */
+      }
 
         &:hover {
           background-color: var(--button-hover-bg);
