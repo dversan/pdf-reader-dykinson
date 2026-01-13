@@ -8,6 +8,22 @@
     {
       "source": "/",
       "destination": "/web/viewer.html"
+    },
+    {
+      "source": "/viewer.mjs",
+      "destination": "/web/viewer.mjs"
+    },
+    {
+      "source": "/viewer.css",
+      "destination": "/web/viewer.css"
+    },
+    {
+      "source": "/images/:path*",
+      "destination": "/web/images/:path*"
+    },
+    {
+      "source": "/locale/:path*",
+      "destination": "/web/locale/:path*"
     }
   ],
   "headers": [
