@@ -678,11 +678,6 @@
          mask-image: url(images/filter.svg); /* Hardcoding for specific requirement or use variable if available */
       }
 
-        &:hover {
-          background-color: var(--button-hover-bg);
-        }
-      }
-
       .bookmarksList {
           padding: 10px 0;
 
