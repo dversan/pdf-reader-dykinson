@@ -1,13 +1,13 @@
 {
-  "buildCommand": "npx gulp generic && cp -r build/generic/build/* build/generic/web/",
-  "outputDirectory": "build/generic/web",
+  "buildCommand": "npx gulp generic",
+  "outputDirectory": "build/generic",
   "framework": null,
   "installCommand": "npm install",
   "devCommand": "npx gulp server",
   "rewrites": [
     {
       "source": "/",
-      "destination": "/viewer.html"
+      "destination": "/web/viewer.html"
     }
   ],
   "headers": [
